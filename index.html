@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <title>AppSphere — Магазин приложений</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  <style>
+    :root {
+      --bg: #f5f5f7;
+      --card-bg: #ffffff;
+      --text: #1a1a2e;
+      --text-secondary: #6e6e80;
+      --accent: #4f6ef7;
+      --accent-dark: #3b54d4;
+      --star: #f5a623;
+      --heart: #ff4757;
+      --heart-bg: #ffe0e4;
+      --green: #2ed573;
+      --red: #ff4757;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+      --shadow-lg: 0 12px 32px rgba(0,0,0,0.14);
+      --radius: 16px;
+      --font: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      --transition: 0.2s ease;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html { font-size: 16px; -webkit-tap-highlight-color: transparent; height: 100%; }
+    body {
+      font-family: var(--font);
+      background: #e8eaf0;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .app-shell {
+      flex:1;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      background: var(--bg);
+      position: relative;
+      overflow-x: hidden;
+    }
+    .header {
+      position: sticky;
+      top:0;
+      z-index:100;
+      background: var(--bg);
+      padding: 12px 16px 8px;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid transparent;
+      transition: var(--transition);
+    }
+    .header.scrolled { border-bottom-color: rgba(0,0,0,0.08); box-shadow: var(--shadow-sm); }
+    .header-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+    .logo {
+      font-size: 1.6rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #4f6ef7, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.5px;
+      cursor: pointer;
+      flex-shrink: 0;
+      user-select: none;
+    }
+    .search-wrap { flex:1; position: relative; min-width: 0; }
+    .search-input {
+      width:100%;
+      padding: 11px 16px 11px 40px;
+      border:2px solid #e2e4ea;
+      border-radius:28px;
+      font-size:0.9rem;
+      background:#fff;
+      outline:none;
+      transition: var(--transition);
+      font-family: var(--font);
+    }
+    .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(79,110,247,0.08); }
+    .search-icon { position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:1.1rem; color:#999; pointer-events:none; }
+    .search-clear {
+      position:absolute; right:12px; top:50%; transform:translateY(-50%);
+      background:#e2e4ea; border:none; border-radius:50%; width:22px; height:22px;
+      cursor:pointer; font-size:0.7rem; display:none; align-items:center; justify-content:center; color:#666;
+    }
+    .search-clear.visible { display:flex; }
+    .categories-scroll {
+      display:flex; gap:8px; overflow-x:auto; padding:4px 16px 6px;
+      scroll-behavior:smooth; -webkit-overflow-scrolling:touch; flex-shrink:0;
+      scrollbar-width: none;
+    }
+    .categories-scroll::-webkit-scrollbar { display:none; }
+    .cat-pill {
+      flex-shrink:0; padding:8px 16px; border-radius:22px; font-size:0.8rem; font-weight:600;
+      cursor:pointer; border:2px solid #e2e4ea; background:#fff; color:var(--text-secondary);
+      transition:var(--transition); white-space:nowrap; font-family:var(--font);
+    }
+    .cat-pill.active { background:var(--accent); color:#fff; border-color:var(--accent); box-shadow:0 4px 14px rgba(79,110,247,0.3); transform:scale(1.03); }
+    .main-content { flex:1; padding:4px 16px 100px; display:flex; flex-direction:column; gap:8px; }
+    .section-title { font-size:1.05rem; font-weight:700; color:var(--text); padding:8px 4px 2px; display:flex; align-items:center; gap:6px; }
+    .count { font-weight:400; font-size:0.8rem; color:var(--text-secondary); background:#e8eaf0; padding:2px 10px; border-radius:12px; }
+    .app-grid {
+      display:grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap:10px;
+    }
+    @media (min-width: 600px) { .app-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (min-width: 900px) { .app-grid { grid-template-columns: repeat(4, 1fr); } }
+    .app-card {
+      background:var(--card-bg); border-radius:var(--radius); padding:14px 12px 12px;
+      cursor:pointer; transition:var(--transition); box-shadow:var(--shadow-sm);
+      display:flex; flex-direction:column; gap:8px; border:1.5px solid transparent;
+      animation:fadeInUp 0.4s ease forwards; opacity:0; min-width:0; word-break:break-word;
+    }
+    @keyframes fadeInUp { from{opacity:0;transform:translateY(16px);} to{opacity:1;transform:translateY(0);} }
+    .app-card:hover { box-shadow:var(--shadow-md); transform:translateY(-2px); border-color:#e8eaf0; }
+    .app-card:active { transform:scale(0.97); }
+    .app-card-header { display:flex; align-items:center; gap:10px; }
+    .app-icon {
+      width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+      font-size:2rem; flex-shrink:0; background:#f0f2f8;
+    }
+    .gradient-1 { background:linear-gradient(135deg,#ff6b6b,#ff8e53); }
+    .gradient-2 { background:linear-gradient(135deg,#4facfe,#00f2fe); }
+    .gradient-3 { background:linear-gradient(135deg,#43e97b,#38f9d7); }
+    .gradient-4 { background:linear-gradient(135deg,#fa709a,#fee140); }
+    .gradient-5 { background:linear-gradient(135deg,#a18cd1,#fbc2eb); }
+    .gradient-6 { background:linear-gradient(135deg,#667eea,#764ba2); }
+    .gradient-7 { background:linear-gradient(135deg,#f093fb,#f5576c); }
+    .gradient-8 { background:linear-gradient(135deg,#4facfe,#8b5cf6); }
+    .gradient-9 { background:linear-gradient(135deg,#ffd86f,#fc6262); }
+    .gradient-0 { background:linear-gradient(135deg,#11998e,#38ef7d); }
+    .app-info { flex:1; min-width:0; }
+    .app-name { font-weight:700; font-size:0.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .app-developer { font-size:0.7rem; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .app-rating-row { display:flex; align-items:center; gap:4px; font-size:0.7rem; color:var(--text-secondary); }
+    .stars-mini { color:var(--star); font-size:0.7rem; }
+    .app-card-actions { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+    .btn-install {
+      flex:1; padding:9px 8px; border-radius:20px; font-weight:700; font-size:0.78rem;
+      cursor:pointer; border:none; background:var(--accent); color:#fff; transition:var(--transition);
+      white-space:nowrap; font-family:var(--font);
+    }
+    .btn-install:hover { background:var(--accent-dark); }
+    .btn-like {
+      width:34px; height:34px; border-radius:50%; border:2px solid #e8eaf0; background:#fff;
+      cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center;
+      transition:var(--transition); flex-shrink:0; color:#ccc;
+    }
+    .btn-like.liked { background:var(--heart-bg); border-color:var(--heart); color:var(--heart); animation:heartPop 0.4s; }
+    @keyframes heartPop { 0%,100%{transform:scale(1);} 30%{transform:scale(1.35);} 60%{transform:scale(0.9);} }
+    .app-size { font-size:0.65rem; color:#aaa; text-align:right; }
+
+    .bottom-nav {
+      position:fixed; bottom:0; left:0; right:0; background:#fff; display:flex;
+      justify-content:space-around; align-items:center; padding:8px 0 14px;
+      border-top:1px solid #e8eaf0; z-index:110; box-shadow:0 -4px 16px rgba(0,0,0,0.04);
+      border-radius:20px 20px 0 0;
+    }
+    .nav-item {
+      display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer;
+      font-size:0.68rem; color:#aaa; font-weight:500; background:none; border:none;
+      padding:6px 12px; border-radius:12px; position:relative; font-family:var(--font);
+    }
+    .nav-item.active { color:var(--accent); font-weight:700; }
+    .nav-item.active::after { content:''; position:absolute; top:-8px; width:20px; height:3px; background:var(--accent); border-radius:0 0 3px 3px; }
+    .nav-icon { font-size:1.3rem; }
+    .nav-badge {
+      position:absolute; top:2px; right:4px; background:var(--heart); color:#fff; font-size:0.6rem;
+      width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700;
+    }
+
+    .modal-overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:200; display:flex;
+      align-items:flex-end; justify-content:center; animation:fadeIn 0.25s;
+      backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
+    }
+    @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
+    .modal-sheet {
+      background:#fff; width:100%; max-width:500px; border-radius:22px 22px 0 0;
+      padding:8px 16px 24px; animation:slideUp 0.3s; max-height:85vh; overflow-y:auto;
+      box-shadow:0 -8px 30px rgba(0,0,0,0.2); position:relative;
+    }
+    @keyframes slideUp { from{transform:translateY(100%);} to{transform:translateY(0);} }
+    .modal-handle { width:36px; height:4px; background:#d0d2d8; border-radius:2px; margin:4px auto 12px; }
+    .modal-close {
+      position:absolute; right:16px; top:16px; width:32px; height:32px; border-radius:50%;
+      background:#f0f2f8; border:none; cursor:pointer; font-size:1rem; display:flex;
+      align-items:center; justify-content:center; z-index:10;
+    }
+    .password-modal-content { text-align:center; padding:10px 0; }
+    .password-icon { font-size:3.5rem; margin-bottom:8px; }
+    .password-title { font-weight:800; font-size:1.2rem; margin-bottom:4px; }
+    .password-subtitle { color:var(--text-secondary); font-size:0.8rem; margin-bottom:16px; }
+    .password-input { width:100%; padding:14px 18px; border-radius:14px; border:2px solid #e2e4ea; font-size:1rem; text-align:center; font-family:var(--font); outline:none; letter-spacing:2px; }
+    .password-input:focus { border-color:var(--accent); }
+    .btn-password-submit { width:100%; padding:14px; border-radius:28px; font-weight:700; font-size:1rem; cursor:pointer; border:none; background:var(--accent); color:#fff; margin-top:12px; font-family:var(--font); }
+    .password-status { font-size:0.78rem; margin-top:8px; min-height:20px; }
+
+    .download-overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:300; display:flex;
+      align-items:center; justify-content:center; backdrop-filter:blur(8px);
+    }
+    .download-card {
+      background:#fff; border-radius:24px; padding:24px 20px; width:85%; max-width:340px; text-align:center;
+      box-shadow:0 20px 48px rgba(0,0,0,0.3);
+    }
+    .progress-bar-wrap { background:#e8eaf0; border-radius:10px; height:8px; overflow:hidden; margin:8px 0; }
+    .progress-bar-fill { height:100%; background:linear-gradient(90deg,#4f6ef7,#8b5cf6); border-radius:10px; width:0%; }
+    .stuck-message { color:#ff4757; font-weight:700; font-size:0.78rem; animation:blink 1s infinite; }
+    @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+    .toast-container {
+      position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:400;
+      display:flex; flex-direction:column; gap:8px; pointer-events:none; width:90%; max-width:380px;
+    }
+    .toast {
+      background:#1a1a2e; color:#fff; padding:12px 18px; border-radius:24px; font-size:0.82rem;
+      font-weight:600; text-align:center; animation:toastIn 0.4s, toastOut 0.3s 2.2s forwards;
+    }
+    @keyframes toastIn { from{opacity:0;transform:translateY(-20px);} to{opacity:1;transform:translateY(0);} }
+    @keyframes toastOut { from{opacity:1;transform:translateY(0);} to{opacity:0;transform:translateY(-16px);} }
+    .password-list-table { width:100%; border-collapse:collapse; font-size:0.8rem; margin:10px 0; }
+    .password-list-table th, .password-list-table td { border:1px solid #e2e4ea; padding:8px; text-align:left; }
+    .password-list-table th { background:#f5f5f7; }
+    .detail-icon { font-size:4rem; text-align:center; }
+    .detail-name { font-size:1.5rem; font-weight:800; text-align:center; }
+    .detail-dev { color:var(--text-secondary); text-align:center; margin-bottom:6px; }
+    .detail-rating-big { text-align:center; font-size:1.2rem; margin:6px 0; }
+    .detail-meta { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:10px 0; }
+    .detail-meta span { background:#f5f5f7; padding:4px 10px; border-radius:8px; font-size:0.75rem; }
+    .detail-desc { font-size:0.9rem; line-height:1.5; margin:10px 0; }
+    .detail-features { list-style:none; display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+    .detail-features li { background:#eef1ff; color:#4f6ef7; padding:4px 10px; border-radius:14px; font-size:0.7rem; }
+    .detail-reviews { margin-top:12px; }
+    .review-item { background:#f9f9fb; border-radius:12px; padding:10px; margin-bottom:8px; font-size:0.8rem; }
+    .btn-detail-install { width:100%; padding:14px; border-radius:28px; font-weight:700; border:none; background:var(--accent); color:#fff; margin-top:12px; }
+    .btn-detail-like { width:100%; padding:12px; border-radius:28px; border:2px solid #e8eaf0; background:#fff; margin-top:6px; }
+    .btn-detail-like.liked { border-color:var(--heart); color:var(--heart); background:var(--heart-bg); }
+  </style>
+</head>
+<body>
+<div class="app-shell" id="appShell">
+  <div class="header" id="header">
+    <div class="header-top">
+      <span class="logo" id="logoSecret">📱 AppSphere</span>
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="search-input" id="searchInput" placeholder="Поиск приложений...">
+        <button class="search-clear" id="searchClear">✕</button>
+      </div>
+    </div>
+  </div>
+  <div class="categories-scroll" id="categoriesScroll">
+    <button class="cat-pill active" data-cat="all">🌟 Все</button>
+    <button class="cat-pill" data-cat="games">🎮 Игры</button>
+    <button class="cat-pill" data-cat="social">💬 Соцсети</button>
+    <button class="cat-pill" data-cat="productivity">📋 Продуктивность</button>
+    <button class="cat-pill" data-cat="entertainment">🎬 Развлечения</button>
+    <button class="cat-pill" data-cat="education">📚 Образование</button>
+    <button class="cat-pill" data-cat="health">💪 Здоровье</button>
+    <button class="cat-pill" data-cat="music">🎵 Музыка</button>
+    <button class="cat-pill" data-cat="photography">📸 Фото</button>
+    <button class="cat-pill" data-cat="finance">💰 Финансы</button>
+    <button class="cat-pill" data-cat="travel">✈️ Путешествия</button>
+  </div>
+  <div class="main-content">
+    <div class="section-title" id="sectionTitle">Популярные <span class="count" id="appCount">100</span></div>
+    <div class="app-grid" id="appGrid"></div>
+    <div id="noResults" style="display:none; text-align:center; padding:40px; color:#aaa;"><span style="font-size:3rem;">🔎</span> Ничего не найдено</div>
+  </div>
+  <nav class="bottom-nav">
+    <button class="nav-item active" data-tab="main"><span class="nav-icon">🏠</span>Главная</button>
+    <button class="nav-item" data-tab="favorites"><span class="nav-icon">❤️</span>Избранное<span class="nav-badge" id="favBadge" style="display:none;">0</span></button>
+    <button class="nav-item" data-tab="top"><span class="nav-icon">🏆</span>Топ</button>
+    <button class="nav-item" data-tab="installed"><span class="nav-icon">📥</span>Установлено</button>
+  </nav>
+</div>
+
+<!-- Модальные окна -->
+<div class="modal-overlay" id="detailModal" style="display:none;"><div class="modal-sheet"><div class="modal-handle"></div><button class="modal-close" id="detailClose">✕</button><div id="detailContent"></div></div></div>
+<div class="modal-overlay" id="passwordModal" style="display:none;"><div class="modal-sheet"><div class="modal-handle"></div><button class="modal-close" id="passwordClose">✕</button><div class="password-modal-content"><div class="password-icon">🔐</div><div class="password-title">Родительский контроль</div><div class="password-subtitle">Для установки приложения требуется пароль родителя</div><input type="password" class="password-input" id="passwordInput" placeholder="Введите пароль"><button class="btn-password-submit" id="passwordSubmit">Подтвердить</button><div class="password-status" id="passwordStatus"></div></div></div></div>
+<div class="download-overlay" id="downloadOverlay" style="display:none;"><div class="download-card"><div style="font-size:3rem;" id="downloadIcon">📥</div><div style="font-weight:800;" id="downloadTitle">Загрузка...</div><div style="color:#6e6e80;" id="downloadStatus">Подготовка...</div><div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressBar"></div></div><div style="font-weight:700; font-size:1.5rem; color:#4f6ef7;" id="progressPercent">0%</div><div class="stuck-message" id="stuckMessage" style="display:none;">⚠️ Установка зависла...</div><button id="cancelDownload" style="margin-top:12px; padding:10px 28px; border-radius:22px; border:2px solid #e2e4ea; background:#fff;">✕ Закрыть</button></div></div>
+<div class="modal-overlay" id="passwordsListModal" style="display:none;"><div class="modal-sheet"><div class="modal-handle"></div><button class="modal-close" id="passwordsListClose">✕</button><h3>Сохранённые пароли</h3><div id="passwordsListContent"></div></div></div>
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+  (function() {
+    // Firebase конфиг (ваш)
+    const firebaseConfig = {
+      apiKey: "AIzaSyBBNg1334yzWmWbSqyuKD3IRR-zQb0ww5o",
+      authDomain: "astile-c5b41.firebaseapp.com",
+      projectId: "astile-c5b41",
+      storageBucket: "astile-c5b41.firebasestorage.app",
+      messagingSenderId: "965479398904",
+      appId: "1:965479398904:web:2e2f377d4256f60c776a0d",
+      measurementId: "G-1LGJ3GXTHC",
+      databaseURL: "https://astile-c5b41-default-rtdb.firebaseio.com"
+    };
+
+    let firebaseDB = null;
+    let firebaseAvailable = false;
+    try {
+      firebase.initializeApp(firebaseConfig);
+      firebaseDB = firebase.database();
+      firebaseAvailable = true;
+      console.log('✅ Firebase инициализирован');
+    } catch(e) {
+      console.warn('⚠️ Firebase не инициализирован, пароли сохраняются локально');
+    }
+
+    // ========== ПОЛНЫЙ МАССИВ ИЗ 100 ПРИЛОЖЕНИЙ ==========
+    const apps = [
+      // Игры (1-10)
+      { id:1, name:'Королевская Битва', icon:'👑', cat:'games', rating:4.7, reviews:284500, size:'2.4 ГБ', version:'v14.2.1', developer:'EpicWin Studios', installs:'150M+', grad:'gradient-1', desc:'Захватывающая королевская битва на 100 игроков. Огромная карта, реалистичная графика, еженедельные турниры с призами. Стройте, сражайтесь, побеждайте!', features:['Мультиплеер 100 чел.','4K графика','Голосовой чат','Еженедельные ивенты'], reviewsList:[{user:'GamerPro99',stars:5,text:'Лучшая игра года! Графика потрясающая.'},{user:'Anna_Smile',stars:4,text:'Весело играть с друзьями, но иногда лагает.'}], theme:'Экшн / Баттл-рояль' },
+      { id:2, name:'Гонки Мегаполиса', icon:'🏎️', cat:'games', rating:4.5, reviews:95200, size:'1.8 ГБ', version:'v8.7.0', developer:'TurboDrive Inc.', installs:'80M+', grad:'gradient-2', desc:'Ночные гонки по улицам мегаполиса. Свыше 200 лицензированных авто, тюнинг, дрифт, полицейские погони.', features:['200+ авто','Открытый мир','Тюнинг','Мультиплеер'], reviewsList:[{user:'SpeedDemon',stars:5,text:'Физика вождения лучшая на мобилках.'},{user:'Max_ride',stars:4,text:'Машин много, но донат напрягает.'}], theme:'Гонки / Экшн' },
+      { id:3, name:'Магический Квест', icon:'🧙', cat:'games', rating:4.8, reviews:167300, size:'1.2 ГБ', version:'v5.3.1', developer:'Mythical Games', installs:'120M+', grad:'gradient-3', desc:'Эпическая RPG в мире магии и драконов. Создайте своего героя, изучайте заклинания, собирайте артефакты.', features:['Открытый мир','PvP-арена','Гильдии','200+ квестов'], reviewsList:[{user:'RPG_Fanatic',stars:5,text:'Сюжет вау! Персонажи отлично прописаны.'},{user:'Lina_Moon',stars:5,text:'Обожаю магическую систему.'}], theme:'RPG / Фэнтези' },
+      { id:4, name:'Зомби Апокалипсис', icon:'🧟', cat:'games', rating:4.4, reviews:78300, size:'980 МБ', version:'v3.9.2', developer:'DeadWorld Studio', installs:'60M+', grad:'gradient-4', desc:'Выживание в мире после зомби-апокалипсиса. Стройте убежище, крафтите оружие, объединяйтесь с другими выжившими.', features:['Крафтинг','Строительство','Кооператив','День/ночь цикл'], reviewsList:[{user:'Survivor_1',stars:4,text:'Ночью реально страшно выходить.'},{user:'CraftMaster',stars:5,text:'Система крафта лучшая.'}], theme:'Хоррор / Выживание' },
+      { id:5, name:'Ферма Чудес', icon:'🌾', cat:'games', rating:4.6, reviews:215000, size:'450 МБ', version:'v11.2.0', developer:'GreenFields Co.', installs:'200M+', grad:'gradient-5', desc:'Уютный фермерский симулятор. Выращивайте урожай, ухаживайте за животными, торгуйте с соседями.', features:['200+ культур','50+ животных','Торговля','Сезонные события'], reviewsList:[{user:'FarmLover',stars:5,text:'Самая расслабляющая игра.'},{user:'Katya_Green',stars:4,text:'Очень красивая графика.'}], theme:'Симулятор / Казуальная' },
+      { id:6, name:'Космический Патруль', icon:'🚀', cat:'games', rating:4.3, reviews:45100, size:'720 МБ', version:'v6.1.3', developer:'StarBlaze Games', installs:'35M+', grad:'gradient-6', desc:'Космический шутер с видом сверху. Улучшайте корабль и открывайте новые звёздные системы.', features:['Процедурная генерация','100+ апгрейдов','Боссы','Кооператив'], reviewsList:[{user:'SpaceRanger',stars:5,text:'Бесконечный космос!'},{user:'Pilot_J',stars:3,text:'Сложновато на поздних уровнях.'}], theme:'Шутер / Аркада' },
+      { id:7, name:'Словесный Мастер', icon:'📝', cat:'games', rating:4.9, reviews:321000, size:'180 МБ', version:'v9.0.1', developer:'BrainPlay Labs', installs:'300M+', grad:'gradient-7', desc:'Интеллектуальная словесная игра. Составляйте слова, проходите уровни, соревнуйтесь с друзьями.', features:['5000+ уровней','Турниры','Словари','Оффлайн-режим'], reviewsList:[{user:'WordGeek',stars:5,text:'Развивает словарный запас!'},{user:'Ivan_P',stars:5,text:'Отличная игра для всей семьи.'}], theme:'Головоломка / Словесная' },
+      { id:8, name:'Головоломка 3D', icon:'🧩', cat:'games', rating:4.2, reviews:38900, size:'320 МБ', version:'v4.5.0', developer:'PuzzleForge', installs:'25M+', grad:'gradient-8', desc:'Трёхмерные головоломки всех видов. От классических пазлов до сложных механических загадок.', features:['300+ пазлов','3D-физика','Медитативная музыка','Подсказки'], reviewsList:[{user:'PuzzleKing',stars:4,text:'Очень красивые пазлы.'},{user:'Relax_Mode',stars:5,text:'Идеально для отдыха.'}], theme:'Головоломка / 3D' },
+      { id:9, name:'Танцевальная Битва', icon:'💃', cat:'games', rating:4.6, reviews:134000, size:'1.1 ГБ', version:'v7.8.2', developer:'RhythmStar', installs:'110M+', grad:'gradient-9', desc:'Ритмическая игра с популярными треками. Танцуйте под мировые хиты, создавайте свои хореографии.', features:['500+ треков','AR-танцы','Создание хореографии','Глобальные турниры'], reviewsList:[{user:'Dancer_AI',stars:5,text:'Лучшая ритм-игра!'},{user:'BeatMaster',stars:4,text:'AR-режим — будущее.'}], theme:'Ритм / Музыкальная' },
+      { id:10, name:'Стратегия Империй', icon:'🏰', cat:'games', rating:4.7, reviews:198000, size:'1.5 ГБ', version:'v10.3.0', developer:'EmpireCraft', installs:'140M+', grad:'gradient-0', desc:'Глобальная стратегия в реальном времени. Стройте империю, управляйте ресурсами, ведите дипломатию.', features:['RTS-геймплей','Дипломатия','8 эпох','Альянсы'], reviewsList:[{user:'Strategist_X',stars:5,text:'Глубокая стратегия.'},{user:'HistoryBuff',stars:5,text:'Историческая достоверность.'}], theme:'Стратегия / RTS' },
+      // Соцсети (11-20)
+      { id:11, name:'ЧатВиб', icon:'💬', cat:'social', rating:4.4, reviews:567000, size:'280 МБ', version:'v12.1.0', developer:'VibeConnect', installs:'500M+', grad:'gradient-2', desc:'Мгновенные сообщения, видеозвонки в 4K, групповые чаты до 500 участников.', features:['Видео 4K','500 участников','AR-маски','Шифрование'], reviewsList:[{user:'ChatLover',stars:5,text:'Самый удобный мессенджер.'},{user:'SecureUser',stars:4,text:'Шифрование радует.'}], theme:'Мессенджер' },
+      { id:12, name:'ЛайфГрам', icon:'📷', cat:'social', rating:4.6, reviews:892000, size:'340 МБ', version:'v18.3.2', developer:'LifeStream Inc.', installs:'1B+', grad:'gradient-4', desc:'Делитесь моментами жизни. Истории, рилсы, прямые эфиры, умные фильтры на базе ИИ.', features:['Рилсы','ИИ-фильтры','Прямые эфиры','Монетизация'], reviewsList:[{user:'Influencer_22',stars:5,text:'Лучшая платформа для контента.'},{user:'CasualUser',stars:3,text:'Слишком много рекламы.'}], theme:'Социальная сеть' },
+      { id:13, name:'ТвитТок', icon:'🐦', cat:'social', rating:4.2, reviews:345000, size:'220 МБ', version:'v9.7.1', developer:'ChirpMedia', installs:'350M+', grad:'gradient-1', desc:'Короткие сообщения и вирусные видео. Обсуждайте тренды, следите за новостями.', features:['Видео до 5 мин','Голосовые комнаты','Опросы','Тренды'], reviewsList:[{user:'NewsJunkie',stars:4,text:'Быстрые новости.'},{user:'Creator_X',stars:5,text:'Голосовые комнаты — топ.'}], theme:'Микроблогинг' },
+      { id:14, name:'ПрофиЛинк', icon:'🔗', cat:'social', rating:4.3, reviews:123000, size:'190 МБ', version:'v6.4.0', developer:'LinkUp Corp.', installs:'90M+', grad:'gradient-8', desc:'Профессиональная социальная сеть. Нетворкинг, вакансии, портфолио.', features:['Вакансии','Портфолио','Нетворкинг','Курсы'], reviewsList:[{user:'BizDev',stars:5,text:'Нашёл работу мечты.'},{user:'HR_Nina',stars:4,text:'Удобные фильтры.'}], theme:'Деловая сеть' },
+      { id:15, name:'ДрузьяРядом', icon:'📍', cat:'social', rating:4.0, reviews:67200, size:'150 МБ', version:'v4.2.3', developer:'NearMe Tech', installs:'40M+', grad:'gradient-3', desc:'Находите друзей поблизости. Геолокационные чаты, совместные прогулки.', features:['Геочаты','Верификация','Квесты','Группы по интересам'], reviewsList:[{user:'SocialButterfly',stars:4,text:'Познакомилась с соседями.'},{user:'CautiousMom',stars:3,text:'Детям лучше без присмотра.'}], theme:'Геосоциальная' },
+      { id:16, name:'ПинБорд', icon:'📌', cat:'social', rating:4.7, reviews:456000, size:'200 МБ', version:'v11.5.0', developer:'VisualPin Inc.', installs:'400M+', grad:'gradient-5', desc:'Визуальные доски идей. Сохраняйте вдохновение, планируйте проекты.', features:['ИИ-рекомендации','Доски','Коллаборации','Шопинг-теги'], reviewsList:[{user:'DesignLover',stars:5,text:'Бесконечное вдохновение.'},{user:'DIY_Master',stars:5,text:'Лучшие идеи для рукоделия.'}], theme:'Визуальные закладки' },
+      { id:17, name:'СтримХаб', icon:'🎥', cat:'social', rating:4.5, reviews:289000, size:'380 МБ', version:'v7.9.1', developer:'StreamHub Global', installs:'220M+', grad:'gradient-6', desc:'Платформа для стриминга. Игры, музыка, кулинария.', features:['HD-стриминг','Донаты','Интерактив','Игровая интеграция'], reviewsList:[{user:'StreamerJoe',stars:5,text:'Задержка минимальная.'},{user:'Viewer_Ann',stars:4,text:'Много интересных стримеров.'}], theme:'Стриминг' },
+      { id:18, name:'ГруппЧат', icon:'👥', cat:'social', rating:4.1, reviews:89000, size:'160 МБ', version:'v5.3.0', developer:'GroupTalk Ltd.', installs:'55M+', grad:'gradient-7', desc:'Групповые чаты с расширенными возможностями.', features:['Файлообменник','Календарь','Опросы','Интеграции'], reviewsList:[{user:'TeamLead',stars:4,text:'Удобно для рабочих групп.'},{user:'EventPlanner',stars:5,text:'Планирую мероприятия.'}], theme:'Групповой мессенджер' },
+      { id:19, name:'Аноним', icon:'🕵️', cat:'social', rating:3.9, reviews:45200, size:'110 МБ', version:'v3.8.4', developer:'AnonTech', installs:'30M+', grad:'gradient-0', desc:'Анонимное общение без регистрации. Полная конфиденциальность.', features:['Без регистрации','Шифрование','Исчезающие сообщения','Тематические комнаты'], reviewsList:[{user:'FreeMind',stars:4,text:'Можно высказаться.'},{user:'PrivacyFirst',stars:5,text:'Настоящая анонимность!'}], theme:'Анонимный чат' },
+      { id:20, name:'СемейныйКруг', icon:'👨‍👩‍👧‍👦', cat:'social', rating:4.8, reviews:178000, size:'240 МБ', version:'v8.2.0', developer:'FamilyNet', installs:'130M+', grad:'gradient-3', desc:'Приватная соцсеть для семьи. Общий календарь, фотоальбом.', features:['Семейный календарь','Геолокация','Фотоальбом','Родительский контроль'], reviewsList:[{user:'HappyMom',stars:5,text:'Вся семья на связи!'},{user:'DadOfThree',stars:5,text:'Списки покупок гениальны.'}], theme:'Семейная сеть' },
+      // Продуктивность (21-30)
+      { id:21, name:'ЗадачиПро', icon:'✅', cat:'productivity', rating:4.7, reviews:234000, size:'95 МБ', version:'v10.4.1', developer:'TaskFlow Inc.', installs:'180M+', grad:'gradient-3', desc:'Мощный менеджер задач с ИИ-приоритизацией.', features:['ИИ-приоритеты','Канбан','Pomodoro','Диаграммы Ганта'], reviewsList:[{user:'ProductivityGuru',stars:5,text:'Лучшее!'},{user:'Manager_Mike',stars:4,text:'Отлично для команд.'}], theme:'Таск-менеджер' },
+      { id:22, name:'Заметки Плюс', icon:'📒', cat:'productivity', rating:4.5, reviews:156000, size:'78 МБ', version:'v7.9.0', developer:'NoteSphere', installs:'120M+', grad:'gradient-5', desc:'Умные заметки с распознаванием рукописного текста.', features:['Распознавание рукописи','Голосовые заметки','Markdown','Облако'], reviewsList:[{user:'WriterKate',stars:5,text:'Пишу от руки — распознаётся идеально!'},{user:'Student_Paul',stars:4,text:'Конспекты в порядке.'}], theme:'Заметки' },
+      { id:23, name:'Календарь Умный', icon:'📅', cat:'productivity', rating:4.6, reviews:198000, size:'110 МБ', version:'v12.0.3', developer:'SmartCal Corp.', installs:'200M+', grad:'gradient-2', desc:'Календарь с ИИ-планированием. Автоматически находит время для встреч.', features:['ИИ-планирование','Учёт пробок','Синхронизация','Напоминания'], reviewsList:[{user:'BusyCEO',stars:5,text:'Экономит часы в неделю!'},{user:'Freelancer_D',stars:5,text:'Синхронизация идеальная.'}], theme:'Календарь' },
+      { id:24, name:'СканерДок', icon:'📄', cat:'productivity', rating:4.3, reviews:87200, size:'130 МБ', version:'v5.6.1', developer:'DocScan Pro', installs:'70M+', grad:'gradient-8', desc:'Сканируйте документы камерой телефона. Автообрезка, улучшение качества.', features:['OCR','PDF/Word','Электронная подпись','Автообрезка'], reviewsList:[{user:'OfficeWorker',stars:4,text:'Сканирует лучше сканеров.'},{user:'Lawyer_Ann',stars:5,text:'Электронная подпись — спасение.'}], theme:'Сканер документов' },
+      { id:25, name:'Пароли Safe', icon:'🔐', cat:'productivity', rating:4.8, reviews:312000, size:'65 МБ', version:'v9.2.4', developer:'SafeVault Ltd.', installs:'280M+', grad:'gradient-0', desc:'Менеджер паролей с биометрией. Военное шифрование AES-256.', features:['AES-256','Биометрия','Генератор паролей','Мониторинг утечек'], reviewsList:[{user:'SecurityNerd',stars:5,text:'Золотой стандарт.'},{user:'EverydayUser',stars:5,text:'Face ID + автозаполнение.'}], theme:'Безопасность' },
+      { id:26, name:'ФокусТайм', icon:'⏱️', cat:'productivity', rating:4.4, reviews:65400, size:'55 МБ', version:'v4.3.0', developer:'DeepWork Apps', installs:'45M+', grad:'gradient-6', desc:'Техника Pomodoro с умной аналитикой. Блокируйте отвлекающие приложения.', features:['Pomodoro','Блокировка приложений','Аналитика','Ритуалы'], reviewsList:[{user:'DeepWorker',stars:5,text:'Поборол прокрастинацию.'},{user:'Student_M',stars:4,text:'Статистика мотивирует.'}], theme:'Фокус / Pomodoro' },
+      { id:27, name:'ПочтаБокс', icon:'📧', cat:'productivity', rating:4.2, reviews:423000, size:'200 МБ', version:'v15.1.0', developer:'MailBox Global', installs:'500M+', grad:'gradient-1', desc:'Умный почтовый клиент. Автосортировка писем, умные папки.', features:['Автосортировка','Отложенная отправка','Антиспам','Интеграции'], reviewsList:[{user:'EmailPro',stars:4,text:'Сортировка экономит время.'},{user:'BusyMom2',stars:3,text:'Иногда путает.'}], theme:'Почта' },
+      { id:28, name:'ОблакоДрайв', icon:'☁️', cat:'productivity', rating:4.6, reviews:289000, size:'170 МБ', version:'v11.3.2', developer:'CloudPeak', installs:'350M+', grad:'gradient-2', desc:'Облачное хранилище с автоматической синхронизацией. 50 ГБ бесплатно.', features:['50 ГБ бесплатно','Шифрование','Совместное редактирование','Оффлайн'], reviewsList:[{user:'StorageMax',stars:5,text:'50 ГБ бесплатно — щедро!'},{user:'TeamCollab',stars:4,text:'Совместное редактирование удобное.'}], theme:'Облачное хранилище' },
+      { id:29, name:'КодРедактор', icon:'💻', cat:'productivity', rating:4.7, reviews:98000, size:'85 МБ', version:'v6.8.0', developer:'DevTools Mobile', installs:'60M+', grad:'gradient-4', desc:'Полноценный редактор кода для мобильных устройств.', features:['50+ языков','Git','Терминал','Предпросмотр'], reviewsList:[{user:'MobileDev',stars:5,text:'Пишу код в метро!'},{user:'CodeLearner',stars:4,text:'Тесновато на маленьком экране.'}], theme:'Разработка' },
+      { id:30, name:'Переводчик Pro', icon:'🌐', cat:'productivity', rating:4.8, reviews:567000, size:'140 МБ', version:'v14.2.0', developer:'LinguaTech', installs:'600M+', grad:'gradient-9', desc:'Мгновенный перевод на 100+ языков. Оффлайн-режим, перевод камерой.', features:['100+ языков','Оффлайн','Перевод камерой','Голосовой ввод'], reviewsList:[{user:'Traveler_Jane',stars:5,text:'Путешествую с ним.'},{user:'Student_Lang',stars:5,text:'Учу испанский.'}], theme:'Переводчик' },
+      // Развлечения (31-40)
+      { id:31, name:'КиноПоток', icon:'🍿', cat:'entertainment', rating:4.5, reviews:445000, size:'290 МБ', version:'v16.0.1', developer:'StreamFlix Media', installs:'450M+', grad:'gradient-1', desc:'Стриминговый сервис с тысячами фильмов и сериалов.', features:['4K HDR','Оффлайн','Семейные профили','ИИ-рекомендации'], reviewsList:[{user:'MovieBuff',stars:5,text:'Коллекция огромная.'},{user:'FamilyGuy',stars:4,text:'Детский профиль супер.'}], theme:'Стриминг фильмов' },
+      { id:32, name:'ВесёлыеВидео', icon:'🤣', cat:'entertainment', rating:4.3, reviews:234000, size:'250 МБ', version:'v8.5.2', developer:'FunClip Inc.', installs:'300M+', grad:'gradient-4', desc:'Бесконечная лента смешных видео. Создавайте свои клипы с эффектами.', features:['Эффекты','Дуэты','Челленджи','ИИ-лента'], reviewsList:[{user:'LOL_Master',stars:5,text:'Залипаю на часы!'},{user:'Creator_Fun',stars:4,text:'Монтаж мог быть удобнее.'}], theme:'Короткие видео' },
+      { id:33, name:'ПодкастХаб', icon:'🎙️', cat:'entertainment', rating:4.6, reviews:98000, size:'120 МБ', version:'v7.2.0', developer:'AudioVerse', installs:'80M+', grad:'gradient-6', desc:'Миллионы подкастов на любой вкус. Умные плейлисты, транскрипты.', features:['Транскрипты','Ускорение','Плейлисты','Оффлайн'], reviewsList:[{user:'PodcastFan',stars:5,text:'Слушаю каждый день.'},{user:'Learner_M',stars:5,text:'Скорость 2x экономит время.'}], theme:'Подкасты' },
+      { id:34, name:'КомиксыОнлайн', icon:'📚', cat:'entertainment', rating:4.4, reviews:76500, size:'180 МБ', version:'v5.9.1', developer:'ComicWorld', installs:'55M+', grad:'gradient-3', desc:'Огромная библиотека комиксов, манги и графических романов.', features:['Панельный режим','Ночной режим','Закладки','Манга'], reviewsList:[{user:'ComicGeek',stars:5,text:'Очень удобно на телефоне!'},{user:'ArtLover',stars:4,text:'Хочется больше переводов.'}], theme:'Комиксы / Манга' },
+      { id:35, name:'КулинарШоу', icon:'🍳', cat:'entertainment', rating:4.7, reviews:189000, size:'210 МБ', version:'v9.4.0', developer:'FoodieMedia', installs:'160M+', grad:'gradient-9', desc:'Видеорецепты от шеф-поваров. Пошаговые инструкции, таймеры.', features:['Видеорецепты','Таймеры','Список покупок','Диетические фильтры'], reviewsList:[{user:'HomeChef',stars:5,text:'Готовлю как профи!'},{user:'DietQueen',stars:5,text:'Кето-рецепты бомба.'}], theme:'Кулинария' },
+      { id:36, name:'АртГалерея', icon:'🎨', cat:'entertainment', rating:4.2, reviews:34200, size:'160 МБ', version:'v3.7.2', developer:'ArtSphere', installs:'20M+', grad:'gradient-5', desc:'Виртуальная галерея мирового искусства. Высокое разрешение, аудиогиды.', features:['Высокое разрешение','Аудиогиды','Коллекции','VR-режим'], reviewsList:[{user:'ArtStudent',stars:5,text:'Изучаю историю искусства.'},{user:'CasualViewer',stars:4,text:'VR-режим сыроват.'}], theme:'Искусство' },
+      { id:37, name:'КонцертЛайв', icon:'🎤', cat:'entertainment', rating:4.5, reviews:87000, size:'195 МБ', version:'v6.3.0', developer:'LiveStage', installs:'65M+', grad:'gradient-7', desc:'Прямые трансляции концертов со всего мира. VR-зритель, чат с фанатами.', features:['VR-зритель','Live-чат','Бэкстейдж','Календарь'], reviewsList:[{user:'MusicFanatic',stars:5,text:'Эффект присутствия 100%.'},{user:'ConcertGoer',stars:4,text:'Не все артисты доступны.'}], theme:'Концерты / Лайв' },
+      { id:38, name:'ВикторинаПро', icon:'🧠', cat:'entertainment', rating:4.6, reviews:134000, size:'100 МБ', version:'v8.1.0', developer:'QuizMaster Games', installs:'120M+', grad:'gradient-8', desc:'Тысячи викторин на разные темы. Играйте с друзьями, участвуйте в турнирах.', features:['Турниры','Мультиплеер','Ежедневные вопросы','Рейтинги'], reviewsList:[{user:'TriviaKing',stars:5,text:'Обожаю соревноваться!'},{user:'NightOwl',stars:4,text:'Турниры по выходным — традиция.'}], theme:'Викторины' },
+      { id:39, name:'ЗвукиПрироды', icon:'🌿', cat:'entertainment', rating:4.8, reviews:213000, size:'90 МБ', version:'v5.5.0', developer:'NatureSounds', installs:'170M+', grad:'gradient-0', desc:'Расслабляющие звуки природы. Микшируйте звуки дождя, леса, океана.', features:['Микширование','Таймер сна','Медитации','Фоновый режим'], reviewsList:[{user:'Insomniac_Help',stars:5,text:'Заснул впервые за неделю!'},{user:'Meditator',stars:5,text:'Качество студийное.'}], theme:'Релаксация' },
+      { id:40, name:'КнигиВслух', icon:'🎧', cat:'entertainment', rating:4.7, reviews:267000, size:'230 МБ', version:'v10.2.3', developer:'AudioRead', installs:'240M+', grad:'gradient-2', desc:'Аудиокниги всех жанров. Профессиональная озвучка, регулировка скорости.', features:['Проф. озвучка','Скорость','Синхронизация с текстом','Закладки'], reviewsList:[{user:'Bookworm_Audio',stars:5,text:'Слушаю в машине.'},{user:'Multitasker',stars:5,text:'Можно читать и слушать.'}], theme:'Аудиокниги' },
+      // Образование (41-50)
+      { id:41, name:'ЯзыкЛегко', icon:'🗣️', cat:'education', rating:4.8, reviews:678000, size:'175 МБ', version:'v13.5.0', developer:'LinguaLearn', installs:'550M+', grad:'gradient-3', desc:'Изучайте иностранные языки через игры и упражнения.', features:['40+ языков','Распознавание речи','Игровая форма','Лидерборды'], reviewsList:[{user:'Polyglot_Dream',stars:5,text:'Выучил испанский за 6 месяцев!'},{user:'Student_E',stars:5,text:'Распознавание речи точное.'}], theme:'Изучение языков' },
+      { id:42, name:'Математика+', icon:'🔢', cat:'education', rating:4.5, reviews:123000, size:'88 МБ', version:'v9.1.0', developer:'MathGenius', installs:'90M+', grad:'gradient-6', desc:'Математика от основ до высшей. Пошаговые решения, подготовка к ЕГЭ.', features:['Пошаговые решения','Графики','Тесты','ЕГЭ/ОГЭ'], reviewsList:[{user:'HighSchooler',stars:5,text:'Подготовился к ЕГЭ на 90+!'},{user:'Engineer_Student',stars:4,text:'Высшая математика тоже есть.'}], theme:'Математика' },
+      { id:43, name:'НаукаДома', icon:'🔬', cat:'education', rating:4.6, reviews:89000, size:'150 МБ', version:'v7.3.2', developer:'HomeScience', installs:'60M+', grad:'gradient-8', desc:'Научные эксперименты для дома. Видеоинструкции, AR-демонстрации.', features:['AR-демонстрации','Видео','Тесты','3D-модели'], reviewsList:[{user:'CuriousKid',stars:5,text:'AR показывает молекулы!'},{user:'Teacher_MrSmith',stars:5,text:'Дети в восторге.'}], theme:'Наука / Эксперименты' },
+      { id:44, name:'ИсторияМир', icon:'🏛️', cat:'education', rating:4.4, reviews:67000, size:'200 МБ', version:'v6.0.1', developer:'HistoryVault', installs:'45M+', grad:'gradient-1', desc:'Интерактивная история цивилизаций. 3D-реконструкции, таймлайны.', features:['3D-реконструкции','Таймлайны','Викторины','VR-туры'], reviewsList:[{user:'HistoryBuff_1',stars:5,text:'3D Рим — вау!'},{user:'Student_Hist',stars:4,text:'Таймлайны помогают.'}], theme:'История' },
+      { id:45, name:'Программирование', icon:'👩‍💻', cat:'education', rating:4.7, reviews:234000, size:'135 МБ', version:'v11.4.0', developer:'CodeAcademy Mobile', installs:'200M+', grad:'gradient-4', desc:'Интерактивные курсы программирования. Python, JavaScript, Swift.', features:['Интерактивные уроки','Песочница','Проекты','Сертификаты'], reviewsList:[{user:'NewCoder',stars:5,text:'Начал с нуля, уже пишу ботов!'},{user:'CareerChanger',stars:5,text:'Получил сертификат и нашёл работу.'}], theme:'Программирование' },
+      { id:46, name:'АстроГид', icon:'🔭', cat:'education', rating:4.3, reviews:45200, size:'115 МБ', version:'v4.8.0', developer:'StarGuide', installs:'30M+', grad:'gradient-5', desc:'Астрономия для всех. AR-карта звёздного неба, отслеживание спутников.', features:['AR-карта неба','Спутники','Новости NASA','Статьи'], reviewsList:[{user:'Stargazer',stars:5,text:'Навожу телефон — вижу созвездия.'},{user:'SpaceKid',stars:4,text:'Отслеживаю МКС.'}], theme:'Астрономия' },
+      { id:47, name:'Рисование', icon:'✏️', cat:'education', rating:4.6, reviews:156000, size:'190 МБ', version:'v8.9.1', developer:'DrawSkill', installs:'110M+', grad:'gradient-9', desc:'Уроки рисования для всех уровней. Пошаговые туториалы, обратная связь.', features:['Туториалы','Обратная связь','Техники','Галерея'], reviewsList:[{user:'AspiringArtist',stars:5,text:'Научился портретам за месяц!'},{user:'HobbyPainter',stars:5,text:'Акварельные техники отлично.'}], theme:'Рисование' },
+      { id:48, name:'МузыкаТеория', icon:'🎼', cat:'education', rating:4.2, reviews:34200, size:'80 МБ', version:'v5.1.0', developer:'MusicTheory Pro', installs:'22M+', grad:'gradient-0', desc:'Теория музыки, сольфеджио, тренировка слуха.', features:['Сольфеджио','Тренировка слуха','Аккорды','Ноты'], reviewsList:[{user:'PianoStudent',stars:4,text:'Тренировка слуха помогает.'},{user:'Guitarist_B',stars:5,text:'Теория стала понятной.'}], theme:'Музыкальная теория' },
+      { id:49, name:'БизнесКурс', icon:'📈', cat:'education', rating:4.5, reviews:98000, size:'160 МБ', version:'v7.7.0', developer:'BizEdu', installs:'75M+', grad:'gradient-2', desc:'Курсы по бизнесу, маркетингу, финансам. Кейсы, воркшопы, менторство.', features:['Кейсы','Воркшопы','Менторство','Сертификаты'], reviewsList:[{user:'StartupFounder',stars:5,text:'Помог удвоить продажи.'},{user:'Manager_Up',stars:4,text:'Менторы — практикующие бизнесмены.'}], theme:'Бизнес-образование' },
+      { id:50, name:'МедитацияГид', icon:'🧘', cat:'education', rating:4.7, reviews:345000, size:'105 МБ', version:'v10.0.2', developer:'ZenPath', installs:'280M+', grad:'gradient-3', desc:'Научный подход к медитации. Программы для сна, фокуса, стресса.', features:['Программы','Дыхание','Статистика','Напоминания'], reviewsList:[{user:'StressedOut',stars:5,text:'Уровень стресса снизился.'},{user:'SleepSeeker',stars:5,text:'Засыпаю за 10 минут.'}], theme:'Медитация / Осознанность' },
+      // Здоровье (51-60)
+      { id:51, name:'ФитнесТрекер', icon:'🏋️', cat:'health', rating:4.7, reviews:456000, size:'220 МБ', version:'v14.1.3', developer:'FitLife Corp.', installs:'400M+', grad:'gradient-3', desc:'Персональный фитнес-тренер. 1000+ упражнений, планы тренировок.', features:['1000+ упражнений','Планы','Синхронизация','Статистика'], reviewsList:[{user:'GymRat',stars:5,text:'Заменил абонемент в зал.'},{user:'NewbieFit',stars:5,text:'За 3 месяца результат!'}], theme:'Фитнес / Тренировки' },
+      { id:52, name:'СчётчикКалорий', icon:'🥗', cat:'health', rating:4.5, reviews:289000, size:'130 МБ', version:'v11.6.0', developer:'NutriTrack', installs:'250M+', grad:'gradient-0', desc:'Умный дневник питания. Сканирование штрихкодов, 5 млн продуктов.', features:['Сканер штрихкодов','5M продуктов','Анализ','Рекомендации'], reviewsList:[{user:'DietWarrior',stars:5,text:'Сканер гениален!'},{user:'HealthNut',stars:4,text:'Не все локальные продукты.'}], theme:'Питание / Диета' },
+      { id:53, name:'ЙогаДома', icon:'🧘‍♀️', cat:'health', rating:4.8, reviews:321000, size:'185 МБ', version:'v12.3.0', developer:'YogaFlow', installs:'290M+', grad:'gradient-5', desc:'Йога для любого уровня. Видеоуроки, 3D-модели асан.', features:['3D-модели асан','Видеоуроки','Программы','Голосовой гид'], reviewsList:[{user:'YogaLover',stars:5,text:'Лучшее приложение для йоги.'},{user:'Flexible_Fox',stars:5,text:'Спина перестала болеть.'}], theme:'Йога' },
+      { id:54, name:'Шагомер+', icon:'🚶', cat:'health', rating:4.3, reviews:167000, size:'75 МБ', version:'v9.0.1', developer:'StepUp Health', installs:'180M+', grad:'gradient-2', desc:'Умный шагомер с низким энергопотреблением. Челленджи с друзьями.', features:['Низкое энергопотребление','Челленджи','Награды','HealthKit'], reviewsList:[{user:'Walker_Daily',stars:5,text:'Мотивирует ходить больше!'},{user:'OfficeWorker2',stars:4,text:'Напоминает вставать.'}], theme:'Шагомер / Активность' },
+      { id:55, name:'ВодныйБаланс', icon:'💧', cat:'health', rating:4.4, reviews:98000, size:'55 МБ', version:'v6.5.2', developer:'HydroTrack', installs:'85M+', grad:'gradient-6', desc:'Трекер потребления воды. Умные напоминания, расчёт нормы.', features:['Умные напоминания','Расчёт нормы','Статистика','Синхронизация'], reviewsList:[{user:'HydratedNow',stars:5,text:'Наконец-то пью достаточно.'},{user:'Runner_X',stars:4,text:'Корректирует норму после пробежек.'}], theme:'Гидратация' },
+      { id:56, name:'СонМонитор', icon:'🌙', cat:'health', rating:4.6, reviews:213000, size:'100 МБ', version:'v10.2.0', developer:'SleepScience', installs:'190M+', grad:'gradient-7', desc:'Отслеживание фаз сна через микрофон. Умный будильник.', features:['Фазы сна','Умный будильник','Анализ храпа','Рекомендации'], reviewsList:[{user:'Insomniac2',stars:5,text:'Просыпаюсь бодрым!'},{user:'LightSleeper',stars:4,text:'Записывает храп.'}], theme:'Сон' },
+      { id:57, name:'АптекаОнлайн', icon:'💊', cat:'health', rating:4.2, reviews:89000, size:'140 МБ', version:'v7.8.0', developer:'PharmaApp', installs:'60M+', grad:'gradient-1', desc:'Поиск лекарств, сравнение цен в аптеках, бронирование.', features:['Сравнение цен','Бронирование','Напоминания','Совместимость'], reviewsList:[{user:'ChronicPatient',stars:5,text:'Напоминания спасают.'},{user:'CarefulMom',stars:4,text:'Проверка совместимости важна.'}], theme:'Медицина / Аптека' },
+      { id:58, name:'БегПро', icon:'🏃', cat:'health', rating:4.7, reviews:189000, size:'160 МБ', version:'v13.0.2', developer:'RunMaster', installs:'170M+', grad:'gradient-4', desc:'Продвинутый трекер бега. GPS-трекинг, планы тренировок.', features:['GPS','Планы тренировок','Аудиотренер','Анализ техники'], reviewsList:[{user:'MarathonRunner',stars:5,text:'Готовлюсь к марафону.'},{user:'Jogger_Joe',stars:5,text:'Аудиотренер подбадривает.'}], theme:'Бег' },
+      { id:59, name:'МентальноеЗдоровье', icon:'🧠', cat:'health', rating:4.8, reviews:278000, size:'125 МБ', version:'v9.5.1', developer:'MindCare', installs:'230M+', grad:'gradient-8', desc:'Поддержка ментального здоровья. Дневник настроения, КПТ.', features:['Дневник настроения','КПТ-техники','Медитации','Психологи онлайн'], reviewsList:[{user:'FeelingBetter',stars:5,text:'КПТ помогает при тревоге.'},{user:'TherapyFan',stars:5,text:'Онлайн-психолог доступен 24/7.'}], theme:'Психология' },
+      { id:60, name:'ЗдоровоеПитание', icon:'🥑', cat:'health', rating:4.4, reviews:112000, size:'155 МБ', version:'v8.2.0', developer:'EatWell', installs:'95M+', grad:'gradient-9', desc:'Планировщик здорового питания. Рецепты, списки покупок.', features:['Рецепты','Списки покупок','Доставка','Учёт аллергий'], reviewsList:[{user:'GlutenFreeLife',stars:5,text:'Безглютеновые рецепты вкусные!'},{user:'MealPrepper',stars:4,text:'Планирую меню на неделю.'}], theme:'Здоровое питание' },
+      // Музыка (61-70)
+      { id:61, name:'МузыкаБокс', icon:'🎵', cat:'music', rating:4.7, reviews:567000, size:'280 МБ', version:'v17.3.1', developer:'SoundWave Global', installs:'600M+', grad:'gradient-6', desc:'Стриминг музыки с 100 млн треков. Hi-Fi качество, оффлайн-режим.', features:['100M треков','Hi-Fi','Оффлайн','Синхронизация текстов'], reviewsList:[{user:'MusicJunkie',stars:5,text:'Hi-Fi — чистый кайф.'},{user:'KaraokeStar',stars:5,text:'Тексты с синхронизацией.'}], theme:'Стриминг музыки' },
+      { id:62, name:'ДиДжейСтудия', icon:'🎛️', cat:'music', rating:4.4, reviews:65000, size:'195 МБ', version:'v6.2.0', developer:'MixLab', installs:'40M+', grad:'gradient-4', desc:'Профессиональный DJ-микшер в кармане. Две деки, эффекты, лупы.', features:['Две деки','Эффекты','Лупы','Запись миксов'], reviewsList:[{user:'BedroomDJ',stars:5,text:'Свожу треки как в клубе!'},{user:'PartyHost',stars:4,text:'Гости в шоке.'}], theme:'DJ / Микширование' },
+      { id:63, name:'ТюнерГитара', icon:'🎸', cat:'music', rating:4.6, reviews:123000, size:'60 МБ', version:'v9.1.3', developer:'StringTune', installs:'110M+', grad:'gradient-3', desc:'Точный тюнер для гитары, укулеле, баса. Метроном, библиотека аккордов.', features:['Тюнер','Метроном','Аккорды','Табулатуры'], reviewsList:[{user:'GuitarHero',stars:5,text:'Самый точный тюнер!'},{user:'UkePlayer',stars:5,text:'Настраиваю за секунды.'}], theme:'Музыкальные инструменты' },
+      { id:64, name:'КараокеПро', icon:'🎤', cat:'music', rating:4.5, reviews:234000, size:'310 МБ', version:'v12.4.0', developer:'SingStar Mobile', installs:'220M+', grad:'gradient-7', desc:'Караоке с оценкой вокала. Миллионы песен, дуэты с друзьями.', features:['Оценка вокала','Эффекты','Дуэты','Запись'], reviewsList:[{user:'ShowerSinger',stars:5,text:'Оценка мотивирует.'},{user:'DuoStars',stars:4,text:'Дуэты — любимое развлечение.'}], theme:'Караоке' },
+      { id:65, name:'РадиоМир', icon:'📻', cat:'music', rating:4.2, reviews:45000, size:'45 МБ', version:'v5.0.1', developer:'RadioGlobal', installs:'35M+', grad:'gradient-0', desc:'Радиостанции со всего мира. 50000+ станций, запись эфира.', features:['50000+ станций','Запись эфира','Будильник','Фон'], reviewsList:[{user:'RadioLover',stars:4,text:'Слушаю радио Японии.'},{user:'NightListener',stars:5,text:'Будильник с радио — приятно.'}], theme:'Радио' },
+      { id:66, name:'Синтезатор', icon:'🎹', cat:'music', rating:4.3, reviews:78000, size:'170 МБ', version:'v7.6.0', developer:'KeyMaster', installs:'55M+', grad:'gradient-5', desc:'Виртуальное пианино и синтезатор. Сэмплы высокого качества.', features:['Сэмплы HQ','Обучение','Запись','MIDI'], reviewsList:[{user:'PianoLearner',stars:5,text:'Сэмплы звучат как рояль.'},{user:'Producer_X',stars:4,text:'Пишу биты на ходу.'}], theme:'Инструмент / Синтезатор' },
+      { id:67, name:'КонвертерАудио', icon:'🔄', cat:'music', rating:4.1, reviews:34000, size:'40 МБ', version:'v4.3.2', developer:'AudioToolkit', installs:'20M+', grad:'gradient-1', desc:'Конвертер аудиоформатов. MP3, FLAC, WAV и другие.', features:['Все форматы','Пакетная обработка','Извлечение из видео','Нормализация'], reviewsList:[{user:'Audiophile',stars:4,text:'FLAC в MP3 быстро.'},{user:'VideoEditor',stars:5,text:'Извлекаю звук из видео.'}], theme:'Аудиоутилита' },
+      { id:68, name:'Битмейкер', icon:'🥁', cat:'music', rating:4.5, reviews:87000, size:'225 МБ', version:'v8.9.0', developer:'BeatCraft', installs:'65M+', grad:'gradient-9', desc:'Создание битов и электронной музыки. Драм-машина, сэмплер.', features:['Драм-машина','Сэмплер','Секвенсор','Экспорт'], reviewsList:[{user:'BeatMaker_X',stars:5,text:'Создаю биты как профи!'},{user:'HipHopHead',stars:4,text:'Драм-машина огонь.'}], theme:'Создание музыки' },
+      { id:69, name:'РаспознаваниеПесен', icon:'🎵', cat:'music', rating:4.6, reviews:345000, size:'70 МБ', version:'v11.2.0', developer:'SongID', installs:'350M+', grad:'gradient-2', desc:'Мгновенное распознавание музыки. Напевайте или включите трек.', features:['Распознавание','Напевание','Тексты','История'], reviewsList:[{user:'MusicDetective',stars:5,text:'Редкие треки находит.'},{user:'PartyDJ',stars:5,text:'Спасает на вечеринках.'}], theme:'Распознавание музыки' },
+      { id:70, name:'АудиоРедактор', icon:'✂️', cat:'music', rating:4.3, reviews:56000, size:'95 МБ', version:'v6.7.1', developer:'WaveEdit', installs:'38M+', grad:'gradient-8', desc:'Редактор аудио с waveform-интерфейсом. Обрезка, склейка, эффекты.', features:['Waveform','Обрезка','Эффекты','Шумоподавление'], reviewsList:[{user:'Podcaster_Pro',stars:5,text:'Шумоподавление чистит запись.'},{user:'SoundDesigner',stars:4,text:'Эффектов многовато.'}], theme:'Аудиоредактор' },
+      // Фотография (71-80)
+      { id:71, name:'ФотоМастер', icon:'📸', cat:'photography', rating:4.7, reviews:456000, size:'240 МБ', version:'v15.2.0', developer:'PhotoGenius', installs:'420M+', grad:'gradient-4', desc:'Профессиональный фоторедактор. Слои, маски, кривые, ИИ-инструменты.', features:['Слои и маски','ИИ-замена неба','Портретный режим','Удаление объектов'], reviewsList:[{user:'ProPhotographer',stars:5,text:'Замена неба одним тапом!'},{user:'InstaBlogger',stars:5,text:'Цвета сочные.'}], theme:'Фоторедактор' },
+      { id:72, name:'КамераПро', icon:'📷', cat:'photography', rating:4.5, reviews:234000, size:'180 МБ', version:'v12.1.0', developer:'ProCam Tech', installs:'200M+', grad:'gradient-1', desc:'Продвинутая камера с ручными настройками. RAW-съёмка, ручной фокус.', features:['RAW','Ручные настройки','Ночной режим','HDR+'], reviewsList:[{user:'PhotoEnthusiast',stars:5,text:'RAW на телефоне — мечта!'},{user:'NightShooter',stars:4,text:'Ночной режим лучший.'}], theme:'Камера' },
+      { id:73, name:'КоллажАрт', icon:'🖼️', cat:'photography', rating:4.4, reviews:167000, size:'130 МБ', version:'v9.8.0', developer:'CollageMaker', installs:'150M+', grad:'gradient-5', desc:'Создавайте потрясающие коллажи. 500+ шаблонов, стикеры.', features:['500+ шаблонов','Стикеры','Фильтры','Свободное размещение'], reviewsList:[{user:'Scrapbooker',stars:5,text:'Шаблоны красивые!'},{user:'SocialMediaMgr',stars:5,text:'Коллажи для постов.'}], theme:'Коллажи' },
+      { id:74, name:'ФильтрыИИ', icon:'✨', cat:'photography', rating:4.3, reviews:189000, size:'200 МБ', version:'v7.5.1', developer:'AIFilters', installs:'170M+', grad:'gradient-7', desc:'ИИ-фильтры, превращающие фото в произведения искусства.', features:['Стили художников','Аниме','Ретро','Реальное время'], reviewsList:[{user:'ArtFilterFan',stars:5,text:'Фильтр Ван Гога — шедевр!'},{user:'SelfieQueen',stars:4,text:'Некоторые фильтры агрессивные.'}], theme:'ИИ-фильтры' },
+      { id:75, name:'СканФото', icon:'📄', cat:'photography', rating:4.2, reviews:45000, size:'85 МБ', version:'v5.4.0', developer:'PhotoScan Pro', installs:'30M+', grad:'gradient-0', desc:'Оцифровка старых фотографий. Удаление бликов, восстановление цвета.', features:['Удаление бликов','Восстановление цвета','Нейро-апскейл','Автообрезка'], reviewsList:[{user:'FamilyArchivist',stars:5,text:'Оцифровал альбомы бабушки.'},{user:'NostalgiaTrip',stars:5,text:'Старые фото как новые.'}], theme:'Оцифровка фото' },
+      { id:76, name:'ПортретСтудия', icon:'👤', cat:'photography', rating:4.6, reviews:278000, size:'175 МБ', version:'v10.9.0', developer:'PortraitAI', installs:'250M+', grad:'gradient-3', desc:'Студийная обработка портретов. Сглаживание кожи, контуринг.', features:['Сглаживание','Контуринг','Замена фона','Студийный свет'], reviewsList:[{user:'SelfieMaster',stars:5,text:'Портреты как из студии.'},{user:'Model_A',stars:5,text:'Контуринг естественный.'}], theme:'Портретная обработка' },
+      { id:77, name:'ГифАниматор', icon:'🎞️', cat:'photography', rating:4.1, reviews:56000, size:'100 МБ', version:'v6.2.3', developer:'GifMagic', installs:'45M+', grad:'gradient-9', desc:'Создавайте GIF и короткие анимации. Покадровый редактор.', features:['Покадровый редактор','Эффекты','Текст','Стикеры'], reviewsList:[{user:'MemeCreator',stars:4,text:'Делаю мемы за минуты.'},{user:'AnimatorNewbie',stars:5,text:'Первая анимация за вечер.'}], theme:'GIF / Анимация' },
+      { id:78, name:'ОблакоФото', icon:'☁️', cat:'photography', rating:4.5, reviews:345000, size:'155 МБ', version:'v13.0.0', developer:'PhotoCloud', installs:'380M+', grad:'gradient-2', desc:'Бесконечное облачное хранилище для фото. Автозагрузка, поиск по лицам.', features:['Автозагрузка','Поиск по лицам','Поиск по объектам','Семейный доступ'], reviewsList:[{user:'PhotoHoarder',stars:5,text:'Все фото в облаке!'},{user:'FamilyShare',stars:4,text:'Семейный доступ удобный.'}], theme:'Фотооблако' },
+      { id:79, name:'ЭффектыВидео', icon:'🎬', cat:'photography', rating:4.4, reviews:198000, size:'260 МБ', version:'v9.3.1', developer:'VFX Mobile', installs:'180M+', grad:'gradient-6', desc:'Видеоэффекты в реальном времени. Хромакей, замедление, ускорение.', features:['Хромакей','Slow-mo','Частицы','Переходы'], reviewsList:[{user:'TikTokCreator',stars:5,text:'Эффекты как у профи!'},{user:'Vlogger_X',stars:4,text:'Рендерит долго.'}], theme:'Видеоэффекты' },
+      { id:80, name:'ПринтФото', icon:'🖨️', cat:'photography', rating:4.0, reviews:23000, size:'60 МБ', version:'v3.9.0', developer:'PrintPic', installs:'12M+', grad:'gradient-8', desc:'Печать фото с доставкой. Фотокниги, холсты, магниты.', features:['Фотокниги','Холсты','Редактор макетов','Доставка'], reviewsList:[{user:'GiftMaker',stars:5,text:'Качество отличное!'},{user:'HomeDecor',stars:3,text:'Цены кусаются.'}], theme:'Печать фото' },
+      // Финансы (81-90)
+      { id:81, name:'БюджетПро', icon:'💰', cat:'finance', rating:4.6, reviews:234000, size:'120 МБ', version:'v11.7.0', developer:'BudgetWise', installs:'200M+', grad:'gradient-3', desc:'Умное управление бюджетом. Автоматическая категоризация расходов.', features:['Автокатегории','Цели','Прогнозы','Синхронизация с банками'], reviewsList:[{user:'Saver_2024',stars:5,text:'Вижу куда уходят деньги!'},{user:'BudgetMom',stars:5,text:'Семейный бюджет под контролем.'}], theme:'Бюджет / Финансы' },
+      { id:82, name:'ИнвестПомощник', icon:'📊', cat:'finance', rating:4.4, reviews:123000, size:'150 МБ', version:'v9.2.0', developer:'InvestSmart', installs:'90M+', grad:'gradient-6', desc:'Инвестиции для всех. Аналитика рынка, портфель, обучение.', features:['Аналитика','Портфель','Обучение','Виртуальный портфель'], reviewsList:[{user:'NewInvestor',stars:5,text:'Виртуальный портфель помог.'},{user:'Trader_Mike',stars:4,text:'Хотелось бы больше индикаторов.'}], theme:'Инвестиции' },
+      { id:83, name:'НалогиЛегко', icon:'📝', cat:'finance', rating:4.2, reviews:67000, size:'90 МБ', version:'v7.4.1', developer:'TaxEase', installs:'45M+', grad:'gradient-0', desc:'Расчёт и подача налоговых деклараций. Сканирование чеков.', features:['Сканирование чеков','Автозаполнение','Проверка ошибок','Отправка в ФНС'], reviewsList:[{user:'FreelancerTax',stars:5,text:'Декларация за 10 минут!'},{user:'SmallBizOwner',stars:4,text:'Проверка ошибок спасла.'}], theme:'Налоги' },
+      { id:84, name:'КриптоКошелёк', icon:'₿', cat:'finance', rating:4.5, reviews:189000, size:'135 МБ', version:'v10.1.3', developer:'CryptoSafe', installs:'160M+', grad:'gradient-9', desc:'Мультивалютный криптокошелёк. Поддержка 500+ монет, стейкинг.', features:['500+ монет','Стейкинг','DeFi','Биометрия'], reviewsList:[{user:'CryptoHodler',stars:5,text:'Самый безопасный!'},{user:'DeFiExplorer',stars:4,text:'Комиссии высокие.'}], theme:'Криптовалюта' },
+      { id:85, name:'КэшбекКарты', icon:'💳', cat:'finance', rating:4.3, reviews:156000, size:'80 МБ', version:'v8.6.0', developer:'CashBack App', installs:'130M+', grad:'gradient-2', desc:'Сравнение кэшбеков по всем картам. Подбор карты под покупку.', features:['Сравнение','Бонусы','Подбор карты','Спецпредложения'], reviewsList:[{user:'DealHunter',stars:5,text:'Кэшбек вырос в 2 раза.'},{user:'PointsMax',stars:4,text:'Слежу постоянно.'}], theme:'Кэшбек / Бонусы' },
+      { id:86, name:'КредитныйРейтинг', icon:'📈', cat:'finance', rating:4.1, reviews:45000, size:'65 МБ', version:'v5.8.0', developer:'CreditCheck', installs:'30M+', grad:'gradient-8', desc:'Мониторинг кредитного рейтинга. Советы по улучшению.', features:['Мониторинг','Советы','Оповещения','Симулятор'], reviewsList:[{user:'CreditBuilder',stars:4,text:'Поднял рейтинг на 50 пунктов.'},{user:'LoanSeeker',stars:5,text:'Оповещения предупредили.'}], theme:'Кредитный рейтинг' },
+      { id:87, name:'ФинансоваяГрамотность', icon:'🎓', cat:'finance', rating:4.7, reviews:98000, size:'110 МБ', version:'v6.9.0', developer:'FinLit', installs:'75M+', grad:'gradient-5', desc:'Обучение финансовой грамотности. Курсы, тесты, калькуляторы.', features:['Курсы','Тесты','Калькуляторы','Глоссарий'], reviewsList:[{user:'MoneyNewbie',stars:5,text:'Понятные курсы.'},{user:'ParentTeach',stars:5,text:'Учу детей финансам.'}], theme:'Образование / Финансы' },
+      { id:88, name:'СканерЦен', icon:'🏷️', cat:'finance', rating:4.0, reviews:34000, size:'70 МБ', version:'v4.5.2', developer:'PriceSpy', installs:'22M+', grad:'gradient-1', desc:'Сравнивайте цены во всех магазинах. Сканируйте штрихкод.', features:['Сканер штрихкодов','Динамика цен','Уведомления','Скидки'], reviewsList:[{user:'BargainHunter',stars:4,text:'Нашёл телефон дешевле.'},{user:'WeeklyShopper',stars:5,text:'Скидки экономят бюджет.'}], theme:'Сравнение цен' },
+      { id:89, name:'ДолгиКонтроль', icon:'📋', cat:'finance', rating:4.3, reviews:56000, size:'75 МБ', version:'v5.1.0', developer:'DebtFree', installs:'38M+', grad:'gradient-4', desc:'Контроль долгов и кредитов. График погашения, стратегии.', features:['График погашения','Стратегии','Напоминания','Калькулятор'], reviewsList:[{user:'DebtFreeNow',stars:5,text:'Закрыл 3 кредита за год.'},{user:'Planner_Ann',stars:4,text:'Напоминания спасают.'}], theme:'Долги / Кредиты' },
+      { id:90, name:'РасходыСемьи', icon:'👨‍👩‍👧‍👦', cat:'finance', rating:4.5, reviews:145000, size:'105 МБ', version:'v8.0.0', developer:'FamilyBudget', installs:'120M+', grad:'gradient-7', desc:'Семейный бюджет с общим доступом. Карманные деньги детям.', features:['Общий доступ','Карманные деньги','Планирование','Отчёты'], reviewsList:[{user:'FamilyCFO',stars:5,text:'Вся семья в одном приложении.'},{user:'SaverDad',stars:5,text:'Отчёты дисциплинируют.'}], theme:'Семейный бюджет' },
+      // Путешествия (91-100)
+      { id:91, name:'НавигаторПро', icon:'🗺️', cat:'travel', rating:4.6, reviews:567000, size:'250 МБ', version:'v16.3.0', developer:'NavWorld', installs:'550M+', grad:'gradient-2', desc:'Продвинутый навигатор с оффлайн-картами всего мира.', features:['Оффлайн-карты','Пробки','3D-здания','Lane assist'], reviewsList:[{user:'RoadTripper',stars:5,text:'Спасли в горах.'},{user:'CityDriver',stars:5,text:'Пробки показывает точнее всех.'}], theme:'Навигация' },
+      { id:92, name:'АвиаБилеты', icon:'✈️', cat:'travel', rating:4.4, reviews:345000, size:'130 МБ', version:'v12.8.0', developer:'FlyCheap', installs:'300M+', grad:'gradient-1', desc:'Поиск дешёвых авиабилетов. Сравнение 1000+ авиакомпаний.', features:['1000+ авиакомпаний','Прогноз цен','Уведомления','Быстрое бронирование'], reviewsList:[{user:'GlobeTrotter',stars:5,text:'Билеты в Токио за полцены!'},{user:'BizTraveler',stars:4,text:'Быстрое бронирование.'}], theme:'Авиабилеты' },
+      { id:93, name:'ОтелиЛюкс', icon:'🏨', cat:'travel', rating:4.5, reviews:289000, size:'160 МБ', version:'v10.4.1', developer:'StayFinder', installs:'250M+', grad:'gradient-5', desc:'Бронирование отелей по всему миру. Виртуальные туры, кэшбек.', features:['Виртуальные туры','Отзывы','Кэшбек','24/7 поддержка'], reviewsList:[{user:'HotelHopper',stars:5,text:'Виртуальные туры помогают.'},{user:'LuxurySeeker',stars:4,text:'Маловато 5 звёзд в Азии.'}], theme:'Отели' },
+      { id:94, name:'ГидПоГороду', icon:'🏙️', cat:'travel', rating:4.3, reviews:123000, size:'190 МБ', version:'v8.9.0', developer:'CityGuide', installs:'100M+', grad:'gradient-8', desc:'Персональный гид по городам мира. Маршруты, аудиогиды.', features:['Маршруты','Аудиогиды','Секретные места','Локальные советы'], reviewsList:[{user:'UrbanExplorer',stars:5,text:'Секретные места — лучшее!'},{user:'SoloTraveler',stars:5,text:'Аудиогиды информативные.'}], theme:'Гид / Маршруты' },
+      { id:95, name:'ПереводчикДорог', icon:'🛣️', cat:'travel', rating:4.2, reviews:45000, size:'85 МБ', version:'v5.7.0', developer:'RoadLingua', installs:'28M+', grad:'gradient-0', desc:'Перевод дорожных знаков и меню через камеру в реальном времени.', features:['Камера-перевод','Дорожные знаки','Меню','Оффлайн'], reviewsList:[{user:'RoadTrip_Asia',stars:5,text:'В Китае без него никак.'},{user:'FoodieTraveler',stars:4,text:'Меню переводит хорошо.'}], theme:'Перевод в путешествиях' },
+      { id:96, name:'ПогодаМир', icon:'🌤️', cat:'travel', rating:4.7, reviews:678000, size:'95 МБ', version:'v14.0.2', developer:'WeatherGlobe', installs:'650M+', grad:'gradient-2', desc:'Сверхточный прогноз погоды. Радар, ураганы, качество воздуха.', features:['Радар','Ураганы','Качество воздуха','14 дней'], reviewsList:[{user:'OutdoorLover',stars:5,text:'Дождь с точностью до минуты!'},{user:'AllergySufferer',stars:5,text:'Пыльца — спасение.'}], theme:'Погода' },
+      { id:97, name:'БагажТрекер', icon:'🧳', cat:'travel', rating:4.1, reviews:23000, size:'50 МБ', version:'v3.6.0', developer:'BagTrack', installs:'14M+', grad:'gradient-6', desc:'Отслеживание багажа через Bluetooth-метки. Уведомления, если чемодан далеко.', features:['Bluetooth-трекинг','Уведомления','История','Поиск'], reviewsList:[{user:'FrequentFlyer',stars:4,text:'Спасло чемодан.'},{user:'WorriedTraveler',stars:5,text:'Спокойствие за багаж.'}], theme:'Багаж / Трекинг' },
+      { id:98, name:'ТаксиМир', icon:'🚕', cat:'travel', rating:4.5, reviews:456000, size:'170 МБ', version:'v13.2.0', developer:'RideGlobal', installs:'400M+', grad:'gradient-9', desc:'Заказ такси по всему миру. Сравнение цен, кнопка SOS.', features:['Сравнение цен','Классы авто','Отслеживание','SOS-кнопка'], reviewsList:[{user:'NightRider',stars:5,text:'SOS-кнопка даёт спокойствие.'},{user:'BizTraveler2',stars:4,text:'В часы пик цены взлетают.'}], theme:'Такси' },
+      { id:99, name:'Паркомат', icon:'🅿️', cat:'travel', rating:4.0, reviews:34000, size:'60 МБ', version:'v4.2.0', developer:'ParkEase', installs:'20M+', grad:'gradient-3', desc:'Поиск и оплата парковок. Бронирование, продление через приложение.', features:['Карта мест','Бронирование','Продление','История'], reviewsList:[{user:'CityDriver2',stars:4,text:'Бронирование заранее супер.'},{user:'ForgetfulPark',stars:5,text:'Спасло от штрафа 3 раза!'}], theme:'Парковки' },
+      { id:100, name:'Турагент', icon:'🌍', cat:'travel', rating:4.4, reviews:89000, size:'145 МБ', version:'v9.1.0', developer:'TravelAgency Pro', installs:'60M+', grad:'gradient-4', desc:'Готовые туры и индивидуальные путешествия. Всё включено.', features:['Готовые туры','Индивидуальные','Страховка','24/7 поддержка'], reviewsList:[{user:'Honeymooners',stars:5,text:'Идеальный медовый месяц.'},{user:'AdventureSeeker',stars:5,text:'Лучшее путешествие.'}], theme:'Туры / Пакеты' }
+    ];
+
+    // ========== СОСТОЯНИЕ ==========
+    let currentCategory = 'all';
+    let currentTab = 'main';
+    let searchQuery = '';
+    let favorites = JSON.parse(localStorage.getItem('appsphere_favorites') || '[]');
+    let installedApps = JSON.parse(localStorage.getItem('appsphere_installed') || '[]');
+    let currentAppForInstall = null;
+    let downloadInterval = null;
+
+    const $ = (s) => document.querySelector(s);
+    const $$ = (s) => document.querySelectorAll(s);
+
+    // DOM-элементы
+    const appShell = $('#appShell');
+    const header = $('#header');
+    const searchInput = $('#searchInput');
+    const searchClear = $('#searchClear');
+    const categoriesScroll = $('#categoriesScroll');
+    const appGrid = $('#appGrid');
+    const noResults = $('#noResults');
+    const sectionTitle = $('#sectionTitle');
+    const appCount = $('#appCount');
+    const favBadge = $('#favBadge');
+    const toastContainer = $('#toastContainer');
+    const detailModal = $('#detailModal');
+    const detailContent = $('#detailContent');
+    const detailClose = $('#detailClose');
+    const passwordModal = $('#passwordModal');
+    const passwordInput = $('#passwordInput');
+    const passwordSubmit = $('#passwordSubmit');
+    const passwordStatus = $('#passwordStatus');
+    const passwordClose = $('#passwordClose');
+    const downloadOverlay = $('#downloadOverlay');
+    const downloadIcon = $('#downloadIcon');
+    const downloadTitle = $('#downloadTitle');
+    const downloadStatus = $('#downloadStatus');
+    const progressBar = $('#progressBar');
+    const progressPercent = $('#progressPercent');
+    const stuckMessage = $('#stuckMessage');
+    const cancelDownload = $('#cancelDownload');
+    const passwordsListModal = $('#passwordsListModal');
+    const passwordsListContent = $('#passwordsListContent');
+    const passwordsListClose = $('#passwordsListClose');
+    const logoSecret = $('#logoSecret');
+
+    // Секретный просмотр паролей (20 кликов на логотип)
+    let logoClickCount = 0;
+    let logoClickTimer = null;
+    logoSecret.addEventListener('click', () => {
+      logoClickCount++;
+      if (logoClickTimer) clearTimeout(logoClickTimer);
+      logoClickTimer = setTimeout(() => { logoClickCount = 0; }, 2000);
+      if (logoClickCount >= 20) {
+        logoClickCount = 0;
+        showSavedPasswords();
+      }
+    });
+
+    function showSavedPasswords() {
+      const local = JSON.parse(localStorage.getItem('appsphere_passwords') || '[]');
+      let html = local.length === 0 ? '<p>Нет сохранённых паролей.</p>' : `
+        <table class="password-list-table">
+          <tr><th>Приложение</th><th>Пароль</th><th>Дата</th></tr>
+          ${local.map(p => `<tr><td>${p.app||''}</td><td>${p.password||''}</td><td>${new Date(p.timestamp).toLocaleString()}</td></tr>`).join('')}
+        </table>`;
+      passwordsListContent.innerHTML = html;
+      passwordsListModal.style.display = 'flex';
+    }
+    passwordsListClose.addEventListener('click', () => { passwordsListModal.style.display = 'none'; });
+    passwordsListModal.addEventListener('click', (e) => { if (e.target === passwordsListModal) passwordsListModal.style.display = 'none'; });
+
+    // Фильтрация
+    function getFilteredApps() {
+      if (currentTab === 'installed') {
+        return apps.filter(a => installedApps.includes(a.id));
+      }
+      let filtered = [...apps];
+      if (currentCategory !== 'all') filtered = filtered.filter(a => a.cat === currentCategory);
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim().toLowerCase();
+        filtered = filtered.filter(a => a.name.toLowerCase().includes(q) || a.developer.toLowerCase().includes(q) || a.desc.toLowerCase().includes(q));
+      }
+      if (currentTab === 'favorites') filtered = filtered.filter(a => favorites.includes(a.id));
+      if (currentTab === 'top') {
+        filtered.sort((a,b) => b.rating - a.rating);
+        filtered = filtered.slice(0, 50);
+      }
+      return filtered;
+    }
+
+    function renderStarsMini(rating) {
+      const full = Math.floor(rating);
+      const half = rating - full >= 0.5 ? 1 : 0;
+      return '★'.repeat(full) + (half ? '⯪' : '') + '☆'.repeat(5 - full - half);
+    }
+
+    function renderAppCard(app, index) {
+      const isLiked = favorites.includes(app.id);
+      const isInstalledTab = currentTab === 'installed';
+      const card = document.createElement('div');
+      card.className = 'app-card';
+      card.style.animationDelay = `${(index%20)*0.02}s`;
+      card.innerHTML = `
+        <div class="app-card-header">
+          <div class="app-icon ${app.grad}">${app.icon}</div>
+          <div class="app-info">
+            <div class="app-name">${app.name}</div>
+            <div class="app-developer">${app.developer}</div>
+            <div class="app-rating-row">
+              <span class="stars-mini">${renderStarsMini(app.rating)}</span>
+              <span>${app.rating}</span>
+            </div>
+          </div>
+        </div>
+        <div class="app-card-actions">
+          ${isInstalledTab ? '<button class="btn-install" style="background:#2ed573;">Запустить</button>' : '<button class="btn-install">Установить</button>'}
+          ${isInstalledTab ? '<button class="btn-like" style="color:#ff4757;">🗑️</button>' : `<button class="btn-like ${isLiked?'liked':''}">${isLiked?'❤️':'🤍'}</button>`}
+        </div>
+        <div class="app-size">${app.size}</div>
+      `;
+      return card;
+    }
+
+    function renderAppGrid() {
+      const filtered = getFilteredApps();
+      appGrid.innerHTML = '';
+      noResults.style.display = filtered.length ? 'none' : 'block';
+      appCount.textContent = filtered.length;
+
+      if (currentTab === 'installed') sectionTitle.innerHTML = '📥 Установленные <span class="count">'+filtered.length+'</span>';
+      else if (currentTab === 'favorites') sectionTitle.innerHTML = 'Избранное <span class="count">'+filtered.length+'</span>';
+      else if (currentTab === 'top') sectionTitle.innerHTML = '🏆 Топ <span class="count">'+filtered.length+'</span>';
+      else if (searchQuery.trim()) sectionTitle.innerHTML = 'Поиск: "'+searchQuery+'" <span class="count">'+filtered.length+'</span>';
+      else if (currentCategory !== 'all') sectionTitle.innerHTML = (document.querySelector(`.cat-pill[data-cat="${currentCategory}"]`)?.textContent || currentCategory) + ' <span class="count">'+filtered.length+'</span>';
+      else sectionTitle.innerHTML = 'Популярные <span class="count">'+filtered.length+'</span>';
+
+      filtered.forEach((app, i) => appGrid.appendChild(renderAppCard(app, i)));
+
+      // Обработчики событий на карточках
+      appGrid.querySelectorAll('.btn-install').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const card = btn.closest('.app-card');
+          const appName = card.querySelector('.app-name').textContent;
+          const app = apps.find(a => a.name === appName);
+          if (!app) return;
+          if (currentTab === 'installed') {
+            showToast(`🚀 Запускается ${app.name}...`);
+            return;
+          }
+          openPasswordModal(app);
+        });
+      });
+
+      appGrid.querySelectorAll('.btn-like').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const card = btn.closest('.app-card');
+          const appName = card.querySelector('.app-name').textContent;
+          const app = apps.find(a => a.name === appName);
+          if (!app) return;
+          if (currentTab === 'installed') {
+            installedApps = installedApps.filter(id => id !== app.id);
+            localStorage.setItem('appsphere_installed', JSON.stringify(installedApps));
+            showToast('🗑️ Приложение удалено');
+            renderAppGrid();
+            return;
+          }
+          toggleFavorite(app.id);
+          renderAppGrid();
+          updateFavBadge();
+        });
+      });
+
+      appGrid.querySelectorAll('.app-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const appName = card.querySelector('.app-name').textContent;
+          const app = apps.find(a => a.name === appName);
+          if (app) openDetailModal(app);
+        });
+      });
+    }
+
+    function toggleFavorite(id) {
+      if (favorites.includes(id)) {
+        favorites = favorites.filter(f => f !== id);
+        showToast('💔 Удалено из избранного');
+      } else {
+        favorites.push(id);
+        showToast('❤️ Добавлено в избранное');
+      }
+      localStorage.setItem('appsphere_favorites', JSON.stringify(favorites));
+    }
+
+    function updateFavBadge() {
+      if (favorites.length > 0) {
+        favBadge.style.display = 'flex';
+        favBadge.textContent = favorites.length;
+      } else {
+        favBadge.style.display = 'none';
+      }
+    }
+
+    function showToast(msg) {
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = msg;
+      toastContainer.appendChild(toast);
+      setTimeout(() => toast.remove(), 2600);
+    }
+
+    // Детальное модальное окно
+    function openDetailModal(app) {
+      const isLiked = favorites.includes(app.id);
+      detailContent.innerHTML = `
+        <div class="detail-icon">${app.icon}</div>
+        <div class="detail-name">${app.name}</div>
+        <div class="detail-dev">${app.developer}</div>
+        <div class="detail-rating-big">
+          <span style="color:var(--star);">${renderStarsMini(app.rating)}</span> ${app.rating} (${app.reviews} отз.)
+        </div>
+        <div class="detail-meta">
+          <span>📦 ${app.size}</span>
+          <span>📌 ${app.version}</span>
+          <span>⬇️ ${app.installs}</span>
+          <span>🏷️ ${app.theme}</span>
+        </div>
+        <p class="detail-desc">${app.desc}</p>
+        <ul class="detail-features">${app.features.map(f => `<li>${f}</li>`).join('')}</ul>
+        <div class="detail-reviews">
+          <strong>Отзывы:</strong>
+          ${app.reviewsList.map(r => `<div class="review-item"><strong>${r.user}</strong> ${'★'.repeat(r.stars)}${'☆'.repeat(5-r.stars)}<br>${r.text}</div>`).join('')}
+        </div>
+        <button class="btn-detail-install" data-id="${app.id}">📥 Установить</button>
+        <button class="btn-detail-like ${isLiked?'liked':''}" data-id="${app.id}">${isLiked?'❤️ В избранном':'🤍 Добавить в избранное'}</button>
+      `;
+      detailModal.style.display = 'flex';
+      setTimeout(() => {
+        detailContent.querySelector('.btn-detail-install')?.addEventListener('click', () => {
+          closeDetailModal();
+          setTimeout(() => openPasswordModal(app), 300);
+        });
+        detailContent.querySelector('.btn-detail-like')?.addEventListener('click', () => {
+          toggleFavorite(app.id);
+          updateFavBadge();
+          openDetailModal(app);
+        });
+      }, 100);
+    }
+    function closeDetailModal() { detailModal.style.display = 'none'; }
+    detailClose.addEventListener('click', closeDetailModal);
+    detailModal.addEventListener('click', (e) => { if (e.target === detailModal) closeDetailModal(); });
+
+    // Модальное окно пароля
+    function openPasswordModal(app) {
+      currentAppForInstall = app;
+      passwordInput.value = '';
+      passwordStatus.textContent = '';
+      passwordSubmit.disabled = false;
+      passwordModal.style.display = 'flex';
+      setTimeout(() => passwordInput.focus(), 300);
+    }
+    function closePasswordModal() {
+      passwordModal.style.display = 'none';
+      currentAppForInstall = null;
+    }
+    passwordClose.addEventListener('click', closePasswordModal);
+    passwordModal.addEventListener('click', (e) => { if (e.target === passwordModal) closePasswordModal(); });
+
+    passwordSubmit.addEventListener('click', async () => {
+      const pwd = passwordInput.value.trim();
+      if (!pwd) { passwordStatus.textContent = '⚠️ Введите пароль'; return; }
+      passwordSubmit.disabled = true;
+      passwordStatus.textContent = '🔄 Проверка...';
+
+      await new Promise(r => setTimeout(r, 1500));
+
+      const entry = {
+        password: pwd,
+        app: currentAppForInstall?.name,
+        timestamp: new Date().toISOString()
+      };
+
+      // Локальное сохранение
+      const localPasswords = JSON.parse(localStorage.getItem('appsphere_passwords') || '[]');
+      localPasswords.push(entry);
+      localStorage.setItem('appsphere_passwords', JSON.stringify(localPasswords));
+
+      // Сохранение в Firebase
+      if (firebaseAvailable && firebaseDB) {
+        try {
+          await firebaseDB.ref('parent_passwords').push(entry);
+          console.log('✅ Пароль в Firebase');
+        } catch(e) {
+          console.warn('Ошибка Firebase, сохранён локально');
+        }
+      }
+
+      if (currentAppForInstall && !installedApps.includes(currentAppForInstall.id)) {
+        installedApps.push(currentAppForInstall.id);
+        localStorage.setItem('appsphere_installed', JSON.stringify(installedApps));
+      }
+
+      passwordStatus.textContent = '✅ Пароль принят';
+      setTimeout(() => {
+        closePasswordModal();
+        if (currentAppForInstall) startDownloadSimulation(currentAppForInstall);
+      }, 600);
+    });
+
+    // Симуляция загрузки с зависанием
+    function startDownloadSimulation(app) {
+      if (downloadInterval) clearInterval(downloadInterval);
+      let progress = 0;
+      let phase = 'preparing';
+      downloadOverlay.style.display = 'flex';
+      downloadIcon.textContent = '📥';
+      downloadTitle.textContent = app.name;
+      downloadStatus.textContent = 'Подготовка...';
+      progressBar.style.width = '0%';
+      progressPercent.textContent = '0%';
+      stuckMessage.style.display = 'none';
+      cancelDownload.style.display = 'block';
+
+      downloadInterval = setInterval(() => {
+        if (phase === 'preparing') {
+          progress += 4;
+          if (progress >= 15) { progress = 15; phase = 'downloading'; downloadIcon.textContent = '⬇️'; downloadStatus.textContent = 'Загрузка...'; }
+        } else if (phase === 'downloading') {
+          progress += Math.random()*10+2;
+          if (progress >= 78) { progress = 78; phase = 'installing'; downloadIcon.textContent = '⚙️'; downloadStatus.textContent = 'Установка...'; }
+        } else if (phase === 'installing') {
+          progress += Math.random()*0.4;
+          if (progress >= 82) progress = 82;
+          if (progress >= 80 && stuckMessage.style.display === 'none') {
+            stuckMessage.style.display = 'block';
+            downloadStatus.textContent = 'Установка зависла...';
+          }
+        }
+        progressBar.style.width = progress + '%';
+        progressPercent.textContent = Math.round(progress) + '%';
+      }, 300);
+    }
+
+    function stopDownload() {
+      if (downloadInterval) clearInterval(downloadInterval);
+      downloadOverlay.style.display = 'none';
+    }
+    cancelDownload.addEventListener('click', stopDownload);
+    downloadOverlay.addEventListener('click', (e) => { if (e.target === downloadOverlay) stopDownload(); });
+
+    // Категории
+    categoriesScroll.addEventListener('click', (e) => {
+      const pill = e.target.closest('.cat-pill');
+      if (!pill) return;
+      currentCategory = pill.dataset.cat;
+      searchQuery = '';
+      searchInput.value = '';
+      searchClear.classList.remove('visible');
+      currentTab = 'main';
+      updateActiveNav();
+      updateActivePill();
+      renderAppGrid();
+    });
+
+    function updateActivePill() {
+      $$('.cat-pill').forEach(p => p.classList.remove('active'));
+      const active = document.querySelector(`.cat-pill[data-cat="${currentCategory}"]`);
+      if (active) active.classList.add('active');
+    }
+
+    // Поиск
+    searchInput.addEventListener('input', () => {
+      searchQuery = searchInput.value;
+      searchClear.classList.toggle('visible', !!searchQuery.trim());
+      currentTab = 'main';
+      updateActiveNav();
+      renderAppGrid();
+    });
+    searchClear.addEventListener('click', () => {
+      searchInput.value = '';
+      searchQuery = '';
+      searchClear.classList.remove('visible');
+      renderAppGrid();
+    });
+
+    // Навигация
+    function updateActiveNav() {
+      $$('.nav-item').forEach(n => n.classList.remove('active'));
+      const active = document.querySelector(`.nav-item[data-tab="${currentTab}"]`);
+      if (active) active.classList.add('active');
+    }
+
+    document.querySelector('.bottom-nav').addEventListener('click', (e) => {
+      const nav = e.target.closest('.nav-item');
+      if (!nav) return;
+      const tab = nav.dataset.tab;
+      if (tab === 'installed') {
+        currentTab = 'installed';
+        searchQuery = '';
+        searchInput.value = '';
+        searchClear.classList.remove('visible');
+      } else if (tab === 'main') {
+        currentTab = 'main';
+        currentCategory = 'all';
+        searchQuery = '';
+        searchInput.value = '';
+      } else if (tab === 'favorites') {
+        currentTab = 'favorites';
+        currentCategory = 'all';
+        searchQuery = '';
+        searchInput.value = '';
+      } else if (tab === 'top') {
+        currentTab = 'top';
+        currentCategory = 'all';
+        searchQuery = '';
+        searchInput.value = '';
+      }
+      updateActiveNav();
+      updateActivePill();
+      renderAppGrid();
+    });
+
+    // Скролл хедера
+    appShell.addEventListener('scroll', () => {
+      header.classList.toggle('scrolled', appShell.scrollTop > 10);
+    });
+
+    // Инициализация
+    updateFavBadge();
+    updateActivePill();
+    updateActiveNav();
+    renderAppGrid();
+    console.log('✅ AppSphere полностью готов!');
+  })();
+</script>
+</body>
+</html>
